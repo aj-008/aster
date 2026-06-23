@@ -1,0 +1,23 @@
+[llc]
+block_size = 64
+cache_size = 8388608
+associativity = 8
+replacement_policy = "lru"
+
+[l2]
+block_size = 64
+cache_size = 524288
+associativity = 8
+replacement_policy = "lru"
+
+[l1d]
+block_size = 64
+cache_size = 32768
+associativity = 8
+replacement_policy = "lru"
+
+[l1i]
+block_size = 64
+cache_size = 32768
+associativity = 4
+replacement_policy = "lru"
