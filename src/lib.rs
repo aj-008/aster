@@ -5,3 +5,4 @@ pub mod cache;
 pub mod policy;
 pub mod policies;
 pub mod error;
+pub mod stats;

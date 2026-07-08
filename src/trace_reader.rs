@@ -1,47 +1,89 @@
 use std::io::{self, BufReader, Read};
 use std::fs::File;
+use std::path::Path;
 use flate2::read::GzDecoder;
+use crate::error::{ AsterError, ErrorKind };
 
-
-pub struct TraceReader<R: Read> {
-    reader: BufReader<R>,
+pub struct MemAccess {
+    pub addr: u64,
+    pub pc: u64,
+    pub is_write: bool,
+    pub hit: Option<bool>,
 }
 
+pub trait TraceSource {
+    fn next_instruction(&mut self) -> Option<Result<InputInstruction, AsterError>>;
+    fn instructions_read(&self) -> usize;
+}
+
+pub fn open_trace(path: &str) -> Result<Box<dyn TraceSource>, AsterError> {
+    let stem = path.strip_suffix(".trace.gz").unwrap_or(path);
+
+    match Path::new(stem).extension().and_then(|e| e.to_str()) {
+        Some("champsimtrace") => Ok(Box::new(ChampSimReader::from_path(path)?)),
+        Some(ext) => Err(AsterError::InvalidTrace { fmt: ext.to_string() }),
+        None => Err(AsterError::InvalidTrace { fmt: "no extension".to_string() }),
+    }
+}
+
+
+
+
+// ChampSim only below
 const NUM_INSTR_DESTINATIONS: usize = 2;
 const NUM_INSTR_SOURCES: usize  = 4;
 
-
+// Currently the ChampSim instruction format. need to add a
+// wrapper called mem access to act  as a separater in the 
+// trace reader level to pass to the cache hierarchy
 #[repr(C)]
 #[derive(Debug)]
 pub struct InputInstruction {
-    pub ip: u64,
-    pub is_branch: u8,    
-    pub branch_taken: u8,
-    pub dst_regs: [u8; NUM_INSTR_DESTINATIONS],
-    pub src_regs: [u8; NUM_INSTR_SOURCES],
-    pub dst_mem: [u64; NUM_INSTR_DESTINATIONS],
-    pub src_mem: [u64; NUM_INSTR_SOURCES],
+    ip: u64,
+    is_branch: u8,    
+    branch_taken: u8,
+    dst_regs: [u8; NUM_INSTR_DESTINATIONS],
+    src_regs: [u8; NUM_INSTR_SOURCES],
+    dst_mem: [u64; NUM_INSTR_DESTINATIONS],
+    src_mem: [u64; NUM_INSTR_SOURCES],
+}
+
+impl InputInstruction {
+    pub fn mem_access(&self) -> impl Iterator<Item = MemAccess> + '_ {
+        let loads = self.src_mem.iter()
+            .filter(|&&a| a != 0)
+            .map(|&addr| MemAccess { addr, pc: self.ip, is_write: false, hit: None });
+        let stores = self.dst_mem.iter()
+            .filter(|&&a| a != 0)
+            .map(|&addr| MemAccess { addr, pc: self.ip, is_write: true, hit: None });
+
+        loads.chain(stores)
+    }
+}
+
+pub struct ChampSimReader<R: Read> {
+    reader: BufReader<R>,
+    pub instructions_read: usize,
 }
 
 
-
-
-impl<R: Read> TraceReader<R>{
-    pub fn new(reader: R) -> Self {
-        Self {
-            reader: BufReader::new(reader),
-        }
-    }
-
-    pub fn read_instruction(&mut self) -> Result<InputInstruction, io::Error> {
+impl<R: Read> ChampSimReader<R>{
+    pub fn read_instruction(&mut self) -> Result<InputInstruction, AsterError> {
         let mut buf = [0u8; size_of::<InputInstruction>()];
         self.reader.read_exact(&mut buf)?;
         Ok(unsafe { std::ptr::read(buf.as_ptr() as *const InputInstruction) })
     }
+
+    fn new(reader: R) -> Self {
+        Self {
+            reader: BufReader::new(reader),
+            instructions_read: 0,
+        }
+    }
 }
 
 
-impl TraceReader<GzDecoder<File>> {
+impl ChampSimReader<GzDecoder<File>> {
     pub fn from_path(path: &str) -> io::Result<Self> {
         let file = File::open(path)?;
         let decoder = GzDecoder::new(file);
@@ -50,18 +92,23 @@ impl TraceReader<GzDecoder<File>> {
 }
 
 
-impl<R: Read> Iterator for TraceReader<R> {
-    type Item = InputInstruction;
 
-    fn next(&mut self) -> Option<Self::Item> {
+impl<R: Read> TraceSource for ChampSimReader<R> {
+    fn next_instruction(&mut self) -> Option<Result<InputInstruction, AsterError>> {
         match self.read_instruction() {
-            Ok(val) => Some(val),
-            Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => None,
-            Err(err) => panic!("Fatal: Failed to read instruction. {}", err),
+            Ok(instr) => {
+                self.instructions_read += 1;
+                Some(Ok(instr))
+        }
+            Err(e) if e.kind() == ErrorKind::Io => None,
+            Err(e) => Some(Err(e)),
         }
     }
-}
 
+    fn instructions_read(&self) -> usize {
+        self.instructions_read
+    }
+}
 
 
 #[cfg(test)]
@@ -88,7 +135,7 @@ mod tests {
         assert_eq!(raw.len(), 64); 
 
         let cursor = Cursor::new(raw);
-        let mut reader = TraceReader::new(cursor);
+        let mut reader = ChampSimReader::new(cursor);
         let instr = reader.read_instruction().unwrap();
 
         assert_eq!(instr.ip, 0x0000000000401442);

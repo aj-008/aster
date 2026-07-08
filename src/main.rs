@@ -1,13 +1,13 @@
 use aster::config::load_config;
+use aster::error::AsterError;
 use aster::simulator::Simulator;
-use aster::trace_reader::TraceReader;
 
 
 /// main is a function
-fn main() {
-    let (config, args) = load_config();
-    let reader = TraceReader::from_path(&args.trace)
-        .expect("erm, check trace_reader");
-    let sim = Simulator::new(config, args);
-    sim.run(reader);
+fn main() -> Result<(), AsterError> {
+    let (config, args) = load_config().unwrap();
+    let mut sim = Simulator::new(config, args)?;
+    let stats = sim.run()?;
+    println!("{stats}");
+    Ok(())
 }
