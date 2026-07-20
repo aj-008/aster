@@ -1,5 +1,7 @@
 use crate::{error::AsterError, policy::ReplacementPolicy, trace_reader::MemAccess};
 
+/// Least-recently-used replacement policy. Tracks a per-way logical
+/// timestamp per set and evicts the way with the oldest timestamp.
 pub struct Lru {
     timestamps: Vec<Vec<u64>>,
     clock: u64,
@@ -7,7 +9,19 @@ pub struct Lru {
 }
 
 impl Lru {
-    pub fn new(cache_size: usize, block_size: usize, associativity: usize, _settings: &toml::Value) -> Result<Self, AsterError> {
+    /// Builds an `Lru` state for a cache with the given geometry.
+    /// `_settings` is accepted for interface parity with other policies but
+    /// LRU has no tunable settings.
+    ///
+    /// # Errors
+    /// Never fails; returns `Result` for interface parity with
+    /// [`crate::policy::make_policy`].
+    pub fn new(
+        cache_size: usize,
+        block_size: usize,
+        associativity: usize,
+        _settings: &toml::Value,
+    ) -> Result<Self, AsterError> {
         // initialize timestamps so way 0 is evicted first on a cold set
         let num_sets = cache_size / (block_size * associativity);
         let timestamps = (0..num_sets)
@@ -15,7 +29,7 @@ impl Lru {
             .collect();
         Ok(Self {
             timestamps,
-            clock: associativity as u64,  // start clock above initial values
+            clock: associativity as u64, // start clock above initial values
             num_ways: associativity,
         })
     }

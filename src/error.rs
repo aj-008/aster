@@ -1,7 +1,11 @@
 use thiserror::Error;
 
+/// Result alias used throughout the crate; error type is always [`AsterError`].
 pub type Result<T> = std::result::Result<T, AsterError>;
 
+/// Coarse-grained category for an [`AsterError`], used where callers need to
+/// branch on error type without matching the full enum (e.g. distinguishing
+/// end-of-trace I/O from a real parse failure).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
     Io,
@@ -11,6 +15,8 @@ pub enum ErrorKind {
     InvalidPolicyConfig,
 }
 
+/// Crate-wide error type covering config loading, trace parsing, and
+/// replacement policy setup.
 #[derive(Error, Debug)]
 pub enum AsterError {
     #[error("Failed to read or write data: {0}")]
@@ -30,6 +36,7 @@ pub enum AsterError {
 }
 
 impl AsterError {
+    /// Returns the [`ErrorKind`] category for this error.
     pub fn kind(&self) -> ErrorKind {
         match self {
             AsterError::Io { .. } => ErrorKind::Io,

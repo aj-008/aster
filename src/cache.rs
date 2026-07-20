@@ -2,9 +2,16 @@
 //!
 //! Handles trace memory accesses and calls to cache stats updates
 
-use crate::{config::{Config, CacheConfig}, policy::{ReplacementPolicy, make_policy}, stats::CacheStats, trace_reader::MemAccess};
+use crate::{
+    config::{CacheConfig, Config},
+    policy::{ReplacementPolicy, make_policy},
+    stats::CacheStats,
+    trace_reader::MemAccess,
+};
 
-
+/// L1D -> L2 -> LLC lookup chain driven by a single memory access stream;
+/// each level is only queried on a miss in the level above it. Instruction
+/// cache (`l1i`) is configured but not wired into `access`.
 pub struct CacheHierarchy {
     pub l1d: Cache,
     pub l2: Cache,
@@ -12,6 +19,10 @@ pub struct CacheHierarchy {
 }
 
 impl CacheHierarchy {
+    /// Builds an L1D/L2/LLC hierarchy from `config`.
+    ///
+    /// # Panics
+    /// Panics if any cache's geometry is invalid (see [`Cache::new`]).
     pub fn new(config: Config) -> Self {
         let l1d = Cache::new(&config.l1d);
         let l2 = Cache::new(&config.l2);
@@ -19,6 +30,8 @@ impl CacheHierarchy {
         Self { l1d, l2, llc }
     }
 
+    /// Drives `access` through the hierarchy, stopping at the first level
+    /// that hits.
     pub fn access(&mut self, access: &mut MemAccess) {
         if self.l1d.access(access) == AccessResult::Miss
             && self.l2.access(access) == AccessResult::Miss
@@ -27,6 +40,7 @@ impl CacheHierarchy {
         }
     }
 
+    /// Resets hit/miss counters on every level (used after warmup).
     pub fn reset_stats(&mut self) {
         self.l1d.reset_stats();
         self.l2.reset_stats();
@@ -46,7 +60,7 @@ pub struct Cache {
     misses: usize,
 
     sets: Vec<CacheSet>,
-} 
+}
 
 /// CacheSet represents one set in a cache composed of CacheLines
 pub struct CacheSet {
@@ -67,16 +81,24 @@ pub enum AccessResult {
 }
 
 impl Cache {
-    /// Instantiates and returns a cache object 
+    /// Instantiates and returns a cache object
+    ///
+    /// # Panics
+    /// Panics if `cache_size / (block_size * associativity)` is not a
+    /// power of two (includes the case where it evaluates to zero because
+    /// `block_size * associativity > cache_size`), or if the configured
+    /// replacement policy is invalid.
     pub fn new(config: &CacheConfig) -> Self {
-
         let block_size = config.block_size;
         let associativity = config.associativity;
         let cache_size = config.cache_size;
 
         let num_sets = cache_size / (block_size * associativity);
-        assert!(num_sets.is_power_of_two(), "num_sets must be a power of two");
-        
+        assert!(
+            num_sets.is_power_of_two(),
+            "num_sets must be a power of two"
+        );
+
         let sets = (0..num_sets)
             .map(|_| CacheSet {
                 lines: (0..associativity)
@@ -106,12 +128,11 @@ impl Cache {
     pub fn get_hits(&self) -> usize {
         self.hits
     }
-    
+
     /// Getter for misses
     pub fn get_misses(&self) -> usize {
         self.misses
     }
-
 
     /// Simulates an access on the cache object given a memory address
     pub fn access(&mut self, access: &mut MemAccess) -> AccessResult {
@@ -123,7 +144,8 @@ impl Cache {
 
         // find the set being accessed,
         // look through the lines for validity and match tag
-        let hit_way = self.sets[set_index].lines
+        let hit_way = self.sets[set_index]
+            .lines
             .iter()
             .enumerate()
             .find(|(_, line)| line.valid && line.tag == tag)
@@ -139,7 +161,8 @@ impl Cache {
         // if there is a miss, set an invalid line to the line or evict
         self.misses += 1;
         access.hit = Some(false);
-        let victim = self.sets[set_index].lines
+        let victim = self.sets[set_index]
+            .lines
             .iter()
             .position(|l| !l.valid)
             .unwrap_or_else(|| self.policy.find_victim(set_index));
@@ -149,10 +172,15 @@ impl Cache {
         AccessResult::Miss
     }
 
+    /// Returns a snapshot of this cache's hit/miss counters.
     pub fn stats(&self) -> CacheStats {
-        CacheStats { hits: self.hits as u64, misses: self.misses as u64 }
+        CacheStats {
+            hits: self.hits as u64,
+            misses: self.misses as u64,
+        }
     }
 
+    /// Zeroes access/hit/miss counters without touching cache/policy state.
     pub fn reset_stats(&mut self) {
         self.accesses = 0;
         self.hits = 0;
@@ -160,33 +188,41 @@ impl Cache {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{CacheConfig, default_repl_settings};
     use crate::trace_reader::MemAccess;
-    use crate::config::{ CacheConfig, default_repl_settings };
 
     fn dummy_access(addr: u64) -> MemAccess {
-        MemAccess { addr, pc: 0, is_write: false, hit: None }
+        MemAccess {
+            addr,
+            pc: 0,
+            is_write: false,
+            hit: None,
+        }
     }
 
     #[test]
     fn lru_second_access_hits() {
-        let config = CacheConfig { block_size: 64, associativity: 4, cache_size: 32768, replacement_policy: "lru".to_string(), repl_settings: default_repl_settings() };
+        let config = CacheConfig {
+            block_size: 64,
+            associativity: 4,
+            cache_size: 32768,
+            replacement_policy: "lru".to_string(),
+            repl_settings: default_repl_settings(),
+        };
         let mut cache = Cache::new(&config);
         let mut a = dummy_access(0x1000);
-        
+
         assert_eq!(cache.access(&mut a), AccessResult::Miss);
         assert_eq!(cache.access(&mut a), AccessResult::Hit);
     }
 }
 
-
 // #[cfg(test)]
 // mod tests {
-//    use super::*;   
+//    use super::*;
 //
 //    #[test]
 //    fn cold_miss() {
@@ -196,7 +232,7 @@ mod tests {
 //        assert_eq!(cache.misses, 1);
 //        assert_eq!(cache.hits, 0);
 //    }
-//    
+//
 //    #[test]
 //    fn hit_second_access() {
 //        let mut cache = Cache::new(64, 4, 1024, "lru");
@@ -219,7 +255,7 @@ mod tests {
 //
 //        cache.access(0x400);
 //        cache.access(0x800);
-//        
+//
 //        assert_eq!(cache.hits, 2);
 //    }
 //}
