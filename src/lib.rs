@@ -7,6 +7,8 @@ pub mod cache;
 pub mod config;
 pub mod error;
 pub mod policies;
+pub mod prefetch;
+pub mod prefetchers;
 pub mod policy;
 pub mod simulator;
 pub mod stats;

@@ -20,7 +20,7 @@ impl Simulator {
     /// Returns an [`AsterError`] if the trace at `args.trace` cannot be
     /// opened or has an unrecognized format.
     pub fn new(config: Config, args: Args) -> Result<Self, AsterError> {
-        let hierarchy = CacheHierarchy::new(config);
+        let hierarchy = CacheHierarchy::new(config)?;
 
         let trace_source = open_trace(&args.trace)?;
 
@@ -50,8 +50,10 @@ impl Simulator {
 
             instr_count += 1;
 
+            self.hierarchy.access_instruction(instr.ip());
+
             for mut access in instr.mem_access() {
-                self.hierarchy.access(&mut access);
+                self.hierarchy.access_data(&mut access);
             }
 
             if instr_count == self.warmup_inst as u64 {

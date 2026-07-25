@@ -1,4 +1,4 @@
-use crate::error::{AsterError, ErrorKind};
+use crate::error::AsterError;
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -91,6 +91,10 @@ impl InputInstruction {
 
         loads.chain(stores)
     }
+
+    pub fn ip(&self) -> u64 {
+        self.ip
+    }
 }
 
 /// [`TraceSource`] for ChampSim's fixed-size binary instruction trace
@@ -100,6 +104,9 @@ pub struct ChampSimReader<R: Read> {
     pub instructions_read: usize,
 }
 
+
+// There is an opiton to use bytemuck here to remove the unsafe block 
+// here with macros to ensure no padding on InputInstruction struct
 impl<R: Read> ChampSimReader<R> {
     /// Reads and decodes one fixed-size [`InputInstruction`] record.
     ///
@@ -110,7 +117,7 @@ impl<R: Read> ChampSimReader<R> {
     pub fn read_instruction(&mut self) -> Result<InputInstruction, AsterError> {
         let mut buf = [0u8; size_of::<InputInstruction>()];
         self.reader.read_exact(&mut buf)?;
-        Ok(unsafe { std::ptr::read(buf.as_ptr() as *const InputInstruction) })
+        Ok(unsafe { std::ptr::read_unaligned(buf.as_ptr() as *const InputInstruction) })
     }
 
     fn new(reader: R) -> Self {
@@ -140,7 +147,7 @@ impl<R: Read> TraceSource for ChampSimReader<R> {
                 self.instructions_read += 1;
                 Some(Ok(instr))
             }
-            Err(e) if e.kind() == ErrorKind::Io => None,
+            Err(AsterError::Io(ref e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => None,
             Err(e) => Some(Err(e)),
         }
     }

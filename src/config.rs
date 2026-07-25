@@ -44,8 +44,12 @@ pub struct CacheConfig {
     pub associativity: usize,
     #[serde(default = "default_policy")]
     pub replacement_policy: String,
+    #[serde(default = "default_prefetcher")]
+    pub prefetcher: Option<String>,
     #[serde(default = "default_repl_settings")]
     pub repl_settings: toml::Value,
+    #[serde(default = "default_prefetch_settings")]
+    pub prefetch_settings: toml::Value,
 }
 
 /// Parses command line arguments via clap and
@@ -58,9 +62,9 @@ pub fn load_config() -> Result<(Config, Args), AsterError> {
     let args = Args::parse();
     let config = load_config_from_path(&args.config)?;
 
-    validate_config("LLC", &config.llc)?;
-    validate_config("L2", &config.l2)?;
-    validate_config("L1D", &config.l1d)?;
+    validate_cache_config("LLC", &config.llc)?;
+    validate_cache_config("L2", &config.l2)?;
+    validate_cache_config("L1D", &config.l1d)?;
 
     Ok((config, args))
 }
@@ -72,8 +76,16 @@ pub fn default_repl_settings() -> toml::Value {
     toml::Value::Table(toml::map::Map::new())
 }
 
+pub fn default_prefetch_settings() -> toml::Value {
+    toml::Value::Table(toml::map::Map::new())
+}
+
 fn default_policy() -> String {
     "lru".to_string()
+}
+
+fn default_prefetcher() -> Option<String> {
+    None
 }
 
 /// Loads a [`Config`] from a TOML file at the path `path`
@@ -98,7 +110,7 @@ pub fn load_config_from_path(path: &std::path::Path) -> Result<Config, AsterErro
 ///
 /// # Errors
 /// Returns [`AsterError::Io`] if the cache parameters are invalid
-pub fn validate_config(name: &str, cfg: &CacheConfig) -> Result<(), AsterError> {
+pub fn validate_cache_config(name: &str, cfg: &CacheConfig) -> Result<(), AsterError> {
     if !cfg.block_size.is_power_of_two() {
         return Err(AsterError::Config(format!(
             "{}: block_size must be a power of two",
@@ -116,6 +128,21 @@ pub fn validate_config(name: &str, cfg: &CacheConfig) -> Result<(), AsterError> 
             "{}: cache_size must be a power of two",
             name
         )));
+    }
+    if cfg.block_size * cfg.associativity > cfg.cache_size {
+        return Err(AsterError::Config(format!(
+            "{}: cache_size must be larger than BS * assoc.",
+            name
+        )));
+    }
+    Ok(())
+}
+
+pub fn validate_options(args: &Args) -> Result<(), AsterError> {
+    if args.warmup_instructions > args.simulation_instructions {
+        return Err(AsterError::Config(
+                "Warmup instructions must be less than simulation instructions".to_string()
+        ));
     }
     Ok(())
 }

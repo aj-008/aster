@@ -60,11 +60,15 @@ impl Srrip {
         associativity: usize,
         settings: &toml::Value,
     ) -> Result<Self, AsterError> {
-        // this should really never fail since there are default values for all fields
+        // try_into should really never fail since there are default values for all fields
         let s: SrripSettings = settings.try_into()?;
         let num_sets = cache_size / (block_size * associativity);
 
-        // ideally check that insertion is less than max rrpv
+        if s.max_rrpv > s.increment {
+           return Err(AsterError::Config(
+                "SrripSettings: increment must be less than max rrpv".to_string(),
+            ));
+        }
 
         Ok(Self {
             rrpv_values: vec![vec![s.insertion_rrpv; associativity]; num_sets],
@@ -84,28 +88,23 @@ impl ReplacementPolicy for Srrip {
         }
     }
 
-    // worth noting that 'find_victim' only increments
-    // once, not until a line reaches 'max_rrpv'
     fn find_victim(&mut self, set: usize) -> usize {
-        let victim_set: &Vec<u8> = self.rrpv_values.get(set).expect("set index out of bounds");
-        let (victim_index, victim_rrpv) =
-            match victim_set.iter().enumerate().max_by_key(|(_, item)| *item) {
-                Some((idx, rrpv)) => (idx, *rrpv),
-                None => (
-                    0,
-                    *victim_set
-                        .first()
-                        .expect("set index failure (associativity is 0)"),
-                ),
-            };
+        loop {
+            let victim_set = self.rrpv_values.get(set).expect("set index out of bounds");
 
-        if victim_rrpv < self.max_rrpv {
+            // find the first line with max rrpv if it exists,
+            // otherwise age all lines
+            if let Some((idx, _)) = victim_set
+                .iter()
+                .enumerate()
+                .find(|&(_, &rrpv)| rrpv == self.max_rrpv)
+            {
+                return idx;
+            }
             for rrpv in self.rrpv_values[set].iter_mut() {
                 *rrpv = min(*rrpv + self.increment, self.max_rrpv);
             }
         }
-
-        victim_index
     }
 
     fn install(&mut self, set: usize, way: usize, access: &MemAccess) {

@@ -29,6 +29,7 @@ impl CacheStats {
 /// Aggregated per-level stats plus the instruction count they cover,
 /// produced at the end of a simulation run.
 pub struct SimStats {
+    pub l1i: CacheStats,
     pub l1d: CacheStats,
     pub l2: CacheStats,
     pub llc: CacheStats,
@@ -40,6 +41,7 @@ impl SimStats {
     /// number of instructions the snapshot covers.
     pub fn collect(hierarchy: &CacheHierarchy, instructions: u64) -> Self {
         Self {
+            l1i: hierarchy.l1i.stats(),
             l1d: hierarchy.l1d.stats(),
             l2: hierarchy.l2.stats(),
             llc: hierarchy.llc.stats(),
