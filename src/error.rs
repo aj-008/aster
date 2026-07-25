@@ -47,3 +47,73 @@ impl AsterError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn io_error() -> AsterError {
+        std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "eof").into()
+    }
+
+    #[test]
+    fn kind_maps_each_variant() {
+        assert_eq!(io_error().kind(), ErrorKind::Io);
+        assert_eq!(AsterError::Config("x".into()).kind(), ErrorKind::Config);
+        assert_eq!(
+            AsterError::TraceParse { instr: 0, msg: "x".into() }.kind(),
+            ErrorKind::TraceParse
+        );
+        assert_eq!(
+            AsterError::InvalidTrace { fmt: "x".into() }.kind(),
+            ErrorKind::InvalidTrace
+        );
+        assert_eq!(
+            AsterError::InvalidPolicyConfig("x".into()).kind(),
+            ErrorKind::InvalidPolicyConfig
+        );
+    }
+
+    #[test]
+    fn io_from_conversion_preserves_message() {
+        let err: AsterError = std::io::Error::new(std::io::ErrorKind::NotFound, "missing").into();
+        assert!(err.to_string().contains("missing"));
+        assert_eq!(err.kind(), ErrorKind::Io);
+    }
+
+    #[test]
+    fn display_messages_include_payload() {
+        assert_eq!(
+            AsterError::Config("bad block_size".to_string()).to_string(),
+            "Invalid config: bad block_size"
+        );
+        assert_eq!(
+            AsterError::TraceParse { instr: 42, msg: "short read".to_string() }.to_string(),
+            "Trace parse error at instruction 42: short read"
+        );
+        assert_eq!(
+            AsterError::InvalidTrace { fmt: "foo".to_string() }.to_string(),
+            "Unrecognized trace format foo"
+        );
+        assert_eq!(
+            AsterError::InvalidPolicyConfig("nope".to_string()).to_string(),
+            "Invalid replacement policy config: nope"
+        );
+    }
+
+    #[test]
+    fn error_kind_variants_are_distinct() {
+        let kinds = [
+            ErrorKind::Io,
+            ErrorKind::Config,
+            ErrorKind::TraceParse,
+            ErrorKind::InvalidTrace,
+            ErrorKind::InvalidPolicyConfig,
+        ];
+        for (i, a) in kinds.iter().enumerate() {
+            for (j, b) in kinds.iter().enumerate() {
+                assert_eq!(i == j, a == b);
+            }
+        }
+    }
+}

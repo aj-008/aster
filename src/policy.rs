@@ -55,3 +55,39 @@ pub fn make_policy(config: &CacheConfig) -> Result<Box<dyn ReplacementPolicy>, A
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{default_prefetch_settings, default_repl_settings};
+
+    fn cfg(policy: &str) -> CacheConfig {
+        CacheConfig {
+            block_size: 64,
+            cache_size: 32768,
+            associativity: 8,
+            replacement_policy: policy.to_string(),
+            prefetcher: None,
+            repl_settings: default_repl_settings(),
+            prefetch_settings: default_prefetch_settings(),
+        }
+    }
+
+    #[test]
+    fn make_policy_builds_lru() {
+        assert!(make_policy(&cfg("lru")).is_ok());
+    }
+
+    #[test]
+    fn make_policy_builds_srrip_with_default_settings() {
+        assert!(make_policy(&cfg("srrip")).is_ok());
+    }
+
+    #[test]
+    fn make_policy_rejects_unknown_name() {
+        match make_policy(&cfg("not_a_real_policy")) {
+            Err(e) => assert_eq!(e.kind(), crate::error::ErrorKind::InvalidPolicyConfig),
+            Ok(_) => panic!("expected an error for an unrecognized policy name"),
+        }
+    }
+}
