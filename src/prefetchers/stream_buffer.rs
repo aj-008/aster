@@ -21,12 +21,14 @@ impl TryFrom<&toml::Value> for StreamBufferSettings {
 }
 
 struct StreamEntry {
+    pc: u64,
     last_addr: u64,
-    stride: i64,
+    stride: Option<i64>,
     confirmed: bool,
 }
 pub struct StreamBuffer {
     streams: Vec<StreamEntry>,
+    capacity: usize,
     degree: usize,
     block_size: usize,
     next_evict: usize,
@@ -44,12 +46,9 @@ impl StreamBuffer {
     pub fn new(block_size: usize, settings: &toml::Value) -> Result<Self, AsterError> {
         let s: StreamBufferSettings = settings.try_into()?;
 
-        let streams = (0..s.num_streams)
-            .map(|_| StreamEntry { last_addr: 0, stride: 0, confirmed: false })
-            .collect();
-
         Ok(Self {
-            streams,
+            streams: Vec::with_capacity(s.num_streams),
+            capacity: s.num_streams,
             degree: s.degree,
             block_size,
             next_evict: 0,
@@ -58,26 +57,44 @@ impl StreamBuffer {
 }
 
 impl Prefetcher for StreamBuffer {
-    fn observe(&mut self, addr: u64, _pc: u64, _hit: bool) -> Vec<u64> {
+    fn observe(&mut self, addr: u64, pc: u64, _hit: bool) -> Vec<u64> {
         let block = (addr / self.block_size as u64) as i64;
-        
-        for entry in &mut self.streams {
+
+        if let Some(entry) = self.streams.iter_mut().find(|e| e.pc == pc) {
             let candidate_stride = block - (entry.last_addr / self.block_size as u64) as i64;
-            if candidate_stride == entry.stride {
-                let was_confirmed = entry.confirmed;
-                entry.confirmed = true;
-                entry.last_addr = addr;
-                if was_confirmed {
-                    return (1..=self.degree as i64)
-                        .map(|i| ((block + entry.stride * i) as u64) * self.block_size as u64)
-                        .collect();
+            let result = match entry.stride {
+                None => {
+                    entry.stride = Some(candidate_stride);
+                    Vec::new()
                 }
-            }
+                Some(s) if candidate_stride == s => {
+                    let was_confirmed = entry.confirmed;
+                    entry.confirmed = true;
+                    if was_confirmed {
+                        (1..=self.degree as i64)
+                            .map(|i| ((block + s * i) as u64) * self.block_size as u64)
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Some(_) => {
+                    entry.stride = Some(candidate_stride);
+                    entry.confirmed = false;
+                    Vec::new()
+                },
+            };
+            entry.last_addr = addr;
+            return result;
         }
-        
-        let slot = self.next_evict;
-        self.next_evict = (self.next_evict + 1) % self.streams.len();
-        self.streams[slot] = StreamEntry { last_addr: addr, stride: 1, confirmed: false };
+
+        let new_entry = StreamEntry { pc, last_addr:addr, stride: None, confirmed: false };
+        if self.streams.len() < self.capacity {
+            self.streams.push(new_entry);
+        } else {
+            self.streams[self.next_evict] = new_entry;
+            self.next_evict = (self.next_evict + 1) % self.capacity;
+        }
         Vec::new()
     }
 }
@@ -144,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known bug: observe()'s match loop does not `return`/`break` after updating an entry \
+   #[ignore = "known bug: observe()'s match loop does not `return`/`break` after updating an entry \
                 that was not already confirmed, so execution always falls through to the round-robin \
                 allocation code at the bottom. With num_streams=1 that allocation always targets the \
                 very slot that was just matched-and-updated, immediately resetting `confirmed` back to \

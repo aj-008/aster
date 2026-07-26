@@ -13,3 +13,4 @@ pub mod policy;
 pub mod simulator;
 pub mod stats;
 pub mod trace_reader;
+pub mod reporter;

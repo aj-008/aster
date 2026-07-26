@@ -3,6 +3,8 @@ use crate::config::{Args, Config};
 use crate::error::AsterError;
 use crate::stats::SimStats;
 use crate::trace_reader::{TraceSource, open_trace};
+use crate::reporter::{ConsoleReporter, Progress, Reporter, RunConfig};
+use std::time::Instant;
 
 /// Drives a trace through a [`CacheHierarchy`] for a warmup + measurement
 /// window and produces final [`SimStats`].
@@ -11,6 +13,7 @@ pub struct Simulator {
     warmup_inst: usize,
     simulation_inst: usize,
     hierarchy: CacheHierarchy,
+    reporter: Box<dyn Reporter>,
 }
 
 impl Simulator {
@@ -20,15 +23,20 @@ impl Simulator {
     /// Returns an [`AsterError`] if the trace at `args.trace` cannot be
     /// opened or has an unrecognized format.
     pub fn new(config: Config, args: Args) -> Result<Self, AsterError> {
+        let run_config = RunConfig::from_args_and_config(&args, &config);
         let hierarchy = CacheHierarchy::new(config)?;
-
         let trace_source = open_trace(&args.trace)?;
+
+
+        let mut reporter = Box::new(ConsoleReporter::new());
+        reporter.on_start(&run_config);
 
         Ok(Self {
             trace_source,
             warmup_inst: args.warmup_instructions,
             simulation_inst: args.simulation_instructions,
             hierarchy,
+            reporter,
         })
     }
 
@@ -41,6 +49,15 @@ impl Simulator {
     /// Propagates any [`AsterError`] raised while reading the trace.
     pub fn run(&mut self) -> Result<SimStats, AsterError> {
         let mut instr_count: u64 = 0;
+        let total_inst = (self.warmup_inst + self.simulation_inst) as u64;
+
+        // HEARTBEAT AND PRINTING
+        const HEARTBEAT_INTERVAL: u64 = 1_000_000;
+        let mut next_heartbeat = HEARTBEAT_INTERVAL;
+        let start = Instant::now();
+
+
+
         loop {
             let instr = match self.trace_source.next_instruction() {
                 Some(Ok(i)) => i,
@@ -59,15 +76,37 @@ impl Simulator {
             if instr_count == self.warmup_inst as u64 {
                 self.hierarchy.reset_stats();
             }
+
+            if instr_count >= next_heartbeat {
+                let measured = instr_count.saturating_sub(self.warmup_inst as u64);
+                let snapshot = SimStats::collect(&self.hierarchy, measured);
+ 
+                self.reporter.on_heartbeat(&Progress {
+                    insts_done: instr_count,
+                    insts_total: total_inst,
+                    elapsed: start.elapsed(),
+                    live_hit_rates: vec![
+                        ("L1I".to_string(), snapshot.l1i.hit_rate()),
+                        ("L1D".to_string(), snapshot.l1d.hit_rate()),
+                        ("L2".to_string(), snapshot.l2.hit_rate()),
+                        ("LLC".to_string(), snapshot.llc.hit_rate()),
+                    ],
+                });
+                next_heartbeat += HEARTBEAT_INTERVAL;
+            }
+
+
             if instr_count == self.simulation_inst as u64 + self.warmup_inst as u64 {
                 break;
             }
         }
 
-        Ok(SimStats::collect(
+        let final_stats = SimStats::collect(
             &self.hierarchy,
             instr_count.saturating_sub(self.warmup_inst as u64),
-        ))
+        );
+        self.reporter.on_finish(&final_stats);
+        Ok(final_stats)
     }
 }
 
