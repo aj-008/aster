@@ -2,6 +2,18 @@
 name = "aster"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.75"
+description = "A trace-driven cache hierarchy simulator for ChampSim traces"
+repository = "https://github.com/aj-008/aster"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["cache", "simulator", "architecture", "champsim"]
+categories = ["simulation", "command-line-utilities"]
+exclude = ["traces/", "results/", "*.gz", "*.xz"]
+
+[[bin]]
+name = "aster"
+path = "src/main.rs"
 
 [dependencies]
 toml = "0.8"
