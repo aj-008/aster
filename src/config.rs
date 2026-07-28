@@ -5,7 +5,7 @@
 //! simulator
 
 use crate::error::AsterError;
-use clap::{Parser};
+use clap::Parser;
 use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 #[derive(Parser, Debug)]
 #[command(
     name = "aster",
-    version, 
+    version,
     about,
     after_help = "\
 EXAMPLES:
@@ -33,7 +33,7 @@ pub struct Args {
     pub simulation_instructions: usize,
 
     /// Instructions used to warm the hierarchy before statistics are collected
-    #[arg(short, long, 
+    #[arg(short, long,
         value_name = "N",
         value_parser = parse_count,
         default_value = "0"
@@ -42,14 +42,14 @@ pub struct Args {
 
     /// TOML file describing the cache hierarchy
     #[arg(
-        short, long, 
-        value_name = "FILE", 
+        short,
+        long,
+        value_name = "FILE",
         default_value = "config/default.toml",
         env = "ASTER_CONFIG"
     )]
     pub config: PathBuf,
 }
-
 
 /// Parses an instruction count, accepting `K`/`M`/`B` suffixes and `_`
 /// separators (`50M`, `50_000_000`, `2B` are all valid).
@@ -83,7 +83,6 @@ fn parse_trace(s: &str) -> Result<String, String> {
     }
     Ok(s.to_string())
 }
-
 
 /// Typed config struct parsed from TOML file
 #[derive(Deserialize, Debug)]
@@ -205,7 +204,6 @@ mod tests {
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
-
     #[test]
     fn verify_cli() {
         use clap::CommandFactory;
@@ -233,9 +231,6 @@ mod tests {
     fn parse_trace_rejects_missing_file() {
         assert!(parse_trace("/nonexistent/aster/trace.xz").is_err());
     }
-
-
-
 
     /// Writes `contents` to a uniquely-named file in the OS temp dir and
     /// returns its path. No cleanup crate needed; caller may leave the
@@ -320,8 +315,14 @@ mod tests {
 
     #[test]
     fn default_repl_and_prefetch_settings_are_empty_tables() {
-        assert_eq!(default_repl_settings(), toml::Value::Table(toml::map::Map::new()));
-        assert_eq!(default_prefetch_settings(), toml::Value::Table(toml::map::Map::new()));
+        assert_eq!(
+            default_repl_settings(),
+            toml::Value::Table(toml::map::Map::new())
+        );
+        assert_eq!(
+            default_prefetch_settings(),
+            toml::Value::Table(toml::map::Map::new())
+        );
     }
 
     #[test]

@@ -65,8 +65,9 @@ impl Srrip {
         let num_sets = cache_size / (block_size * associativity);
 
         if s.max_rrpv < s.increment + s.insertion_rrpv {
-           return Err(AsterError::Config(
-                "SrripSettings: max_rrpv must be greater than increment + insertion_rrpv".to_string(),
+            return Err(AsterError::Config(
+                "SrripSettings: max_rrpv must be greater than increment + insertion_rrpv"
+                    .to_string(),
             ));
         }
 
@@ -129,11 +130,21 @@ mod tests {
     }
 
     fn hit() -> MemAccess {
-        MemAccess { addr: 0, pc: 0, is_write: false, hit: Some(true) }
+        MemAccess {
+            addr: 0,
+            pc: 0,
+            is_write: false,
+            hit: Some(true),
+        }
     }
 
     fn miss() -> MemAccess {
-        MemAccess { addr: 0, pc: 0, is_write: false, hit: Some(false) }
+        MemAccess {
+            addr: 0,
+            pc: 0,
+            is_write: false,
+            hit: Some(false),
+        }
     }
 
     #[test]
@@ -184,7 +195,11 @@ mod tests {
         // [0, 3, 1] -- way 1 is already at max_rrpv (3), so no aging pass is needed.
         srrip.rrpv_values[0] = vec![0, 3, 1];
         assert_eq!(srrip.find_victim(0), 1);
-        assert_eq!(srrip.rrpv_values[0], vec![0, 3, 1], "no line should have aged");
+        assert_eq!(
+            srrip.rrpv_values[0],
+            vec![0, 3, 1],
+            "no line should have aged"
+        );
     }
 
     #[test]

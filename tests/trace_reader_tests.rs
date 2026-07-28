@@ -50,7 +50,11 @@ fn open_trace_reads_a_gzip_champsim_trace_end_to_end() {
 
     let third = source.next_instruction().unwrap().unwrap();
     assert_eq!(third.ip(), 0x1008);
-    assert_eq!(third.mem_access().count(), 0, "a zero load address means no access");
+    assert_eq!(
+        third.mem_access().count(),
+        0,
+        "a zero load address means no access"
+    );
 
     assert!(source.next_instruction().is_none());
     assert_eq!(source.instructions_read(), 3);

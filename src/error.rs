@@ -61,7 +61,11 @@ mod tests {
         assert_eq!(io_error().kind(), ErrorKind::Io);
         assert_eq!(AsterError::Config("x".into()).kind(), ErrorKind::Config);
         assert_eq!(
-            AsterError::TraceParse { instr: 0, msg: "x".into() }.kind(),
+            AsterError::TraceParse {
+                instr: 0,
+                msg: "x".into()
+            }
+            .kind(),
             ErrorKind::TraceParse
         );
         assert_eq!(
@@ -88,11 +92,18 @@ mod tests {
             "Invalid config: bad block_size"
         );
         assert_eq!(
-            AsterError::TraceParse { instr: 42, msg: "short read".to_string() }.to_string(),
+            AsterError::TraceParse {
+                instr: 42,
+                msg: "short read".to_string()
+            }
+            .to_string(),
             "Trace parse error at instruction 42: short read"
         );
         assert_eq!(
-            AsterError::InvalidTrace { fmt: "foo".to_string() }.to_string(),
+            AsterError::InvalidTrace {
+                fmt: "foo".to_string()
+            }
+            .to_string(),
             "Unrecognized trace format foo"
         );
         assert_eq!(

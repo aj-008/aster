@@ -17,7 +17,10 @@ pub fn write_temp_bin_file(name_hint: &str, suffix: &str, contents: &[u8]) -> Pa
         n,
         suffix
     ));
-    std::fs::File::create(&path).unwrap().write_all(contents).unwrap();
+    std::fs::File::create(&path)
+        .unwrap()
+        .write_all(contents)
+        .unwrap();
     path
 }
 

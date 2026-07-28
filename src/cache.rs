@@ -3,7 +3,12 @@
 //! Handles trace memory accesses and calls to cache stats updates
 
 use crate::{
-    config::{CacheConfig, Config}, error::AsterError, policy::{ReplacementPolicy, make_policy}, stats::CacheStats, trace_reader::MemAccess, prefetch::{Prefetcher, prefetcher_init},
+    config::{CacheConfig, Config},
+    error::AsterError,
+    policy::{ReplacementPolicy, make_policy},
+    prefetch::{Prefetcher, prefetcher_init},
+    stats::CacheStats,
+    trace_reader::MemAccess,
 };
 
 /// L1D -> L2 -> LLC lookup chain driven by a single memory access stream;
@@ -30,7 +35,12 @@ impl CacheHierarchy {
     }
 
     pub fn access_instruction(&mut self, ip: u64) {
-        let mut access = MemAccess { addr: ip, pc: ip, is_write: false, hit: None };
+        let mut access = MemAccess {
+            addr: ip,
+            pc: ip,
+            is_write: false,
+            hit: None,
+        };
         if self.l1i.access(&mut access).result == AccessResult::Miss
             && self.l2.access(&mut access).result == AccessResult::Miss
         {
@@ -41,9 +51,10 @@ impl CacheHierarchy {
     pub fn access_data(&mut self, access: &mut MemAccess) {
         let l1_outcome = self.l1d.access(access);
 
-        if let Some(addr) = l1_outcome.writeback_addr &&
-            let Some(further) = writeback_into(&mut self.l2, addr) {
-                writeback_into(&mut self.llc, further);
+        if let Some(addr) = l1_outcome.writeback_addr
+            && let Some(further) = writeback_into(&mut self.l2, addr)
+        {
+            writeback_into(&mut self.llc, further);
         }
 
         if l1_outcome.result == AccessResult::Miss {
@@ -88,7 +99,7 @@ pub struct Cache {
     writebacks_received: usize,
 
     prefetch_hits: usize,
-    prefetch_unused: usize, 
+    prefetch_unused: usize,
 }
 
 /// CacheSet represents one set in a cache composed of CacheLines
@@ -141,7 +152,9 @@ impl Cache {
 
         let num_sets = cache_size / (block_size * associativity);
         if !num_sets.is_power_of_two() {
-            return Err(AsterError::Config("num_sets must be a power of two".to_string()))
+            return Err(AsterError::Config(
+                "num_sets must be a power of two".to_string(),
+            ));
         }
 
         let sets = (0..num_sets)
@@ -191,9 +204,14 @@ impl Cache {
     pub fn access(&mut self, access: &mut MemAccess) -> AccessOutcome {
         self.do_access(access, AccessKind::Demand)
     }
-    
+
     pub fn writeback(&mut self, addr: u64) -> AccessOutcome {
-        let mut wb = MemAccess { addr, pc: 0, is_write: true, hit: None };
+        let mut wb = MemAccess {
+            addr,
+            pc: 0,
+            is_write: true,
+            hit: None,
+        };
         self.do_access(&mut wb, AccessKind::Writeback)
     }
 
@@ -206,16 +224,23 @@ impl Cache {
             .lines
             .iter()
             .any(|l| l.valid && l.tag == tag);
-        if already_present { return; }
-        let mut pf_access = MemAccess { addr, pc: 0, is_write: false, hit: None };
+        if already_present {
+            return;
+        }
+        let mut pf_access = MemAccess {
+            addr,
+            pc: 0,
+            is_write: false,
+            hit: None,
+        };
         self.do_access(&mut pf_access, AccessKind::Prefetch);
-
     }
 
     /// Simulates an access on the cache object given a memory address
-    fn do_access(&mut self, access: &mut MemAccess, kind: AccessKind) -> AccessOutcome
-    {
-        if kind == AccessKind::Demand { self.accesses += 1; }
+    fn do_access(&mut self, access: &mut MemAccess, kind: AccessKind) -> AccessOutcome {
+        if kind == AccessKind::Demand {
+            self.accesses += 1;
+        }
         let offset_bits = self.block_size.ilog2() as usize;
         let index_bits = self.num_sets.ilog2() as usize;
         let set_index = ((access.addr >> offset_bits) & (self.num_sets as u64 - 1)) as usize;
@@ -231,7 +256,11 @@ impl Cache {
             .map(|(way, _)| way);
 
         if let Some(way) = hit_way {
-        if kind == AccessKind::Demand { self.hits += 1; } else { self.writebacks_received += 1; }
+            if kind == AccessKind::Demand {
+                self.hits += 1;
+            } else {
+                self.writebacks_received += 1;
+            }
             if access.is_write {
                 self.sets[set_index].lines[way].dirty = true;
             }
@@ -241,18 +270,24 @@ impl Cache {
             }
             access.hit = Some(true);
             self.policy.update(set_index, way, access);
-            
+
             //prefetch on demand access only
             let prefetch_addrs = if kind == AccessKind::Demand {
                 self.determine_prefetch_addrs(access, hit_way)
             } else {
                 None
             };
-            return AccessOutcome { result: AccessResult::Hit, writeback_addr: None, prefetch_addrs };
+            return AccessOutcome {
+                result: AccessResult::Hit,
+                writeback_addr: None,
+                prefetch_addrs,
+            };
         }
 
         // if there is a miss, set an invalid line to the line or evict
-        if kind == AccessKind::Demand { self.misses += 1; }
+        if kind == AccessKind::Demand {
+            self.misses += 1;
+        }
         access.hit = Some(false);
         let victim = self.sets[set_index]
             .lines
@@ -286,10 +321,18 @@ impl Cache {
         } else {
             None
         };
-        AccessOutcome { result: AccessResult::Miss, writeback_addr, prefetch_addrs }
+        AccessOutcome {
+            result: AccessResult::Miss,
+            writeback_addr,
+            prefetch_addrs,
+        }
     }
 
-    fn determine_prefetch_addrs(&mut self, access: &mut MemAccess, hit_way: Option<usize>) -> Option<Vec<u64>> {
+    fn determine_prefetch_addrs(
+        &mut self,
+        access: &mut MemAccess,
+        hit_way: Option<usize>,
+    ) -> Option<Vec<u64>> {
         if let Some(pf) = &mut self.prefetcher {
             let candidates = pf.observe(access.addr, access.pc, hit_way.is_some());
             for addr in &candidates {
@@ -324,11 +367,21 @@ mod tests {
     use crate::trace_reader::MemAccess;
 
     fn dummy_access(addr: u64) -> MemAccess {
-        MemAccess { addr, pc: 0, is_write: false, hit: None }
+        MemAccess {
+            addr,
+            pc: 0,
+            is_write: false,
+            hit: None,
+        }
     }
 
     fn write_access(addr: u64) -> MemAccess {
-        MemAccess { addr, pc: 0, is_write: true, hit: None }
+        MemAccess {
+            addr,
+            pc: 0,
+            is_write: true,
+            hit: None,
+        }
     }
 
     fn cache_config(block_size: usize, cache_size: usize, associativity: usize) -> CacheConfig {
@@ -349,7 +402,10 @@ mod tests {
         associativity: usize,
         policy: &str,
     ) -> CacheConfig {
-        CacheConfig { replacement_policy: policy.to_string(), ..cache_config(block_size, cache_size, associativity) }
+        CacheConfig {
+            replacement_policy: policy.to_string(),
+            ..cache_config(block_size, cache_size, associativity)
+        }
     }
 
     fn cache_config_with_prefetcher(
@@ -365,7 +421,12 @@ mod tests {
     }
 
     fn small_cache(associativity: usize, num_sets: usize) -> Cache {
-        Cache::new(&cache_config(64, 64 * associativity * num_sets, associativity)).unwrap()
+        Cache::new(&cache_config(
+            64,
+            64 * associativity * num_sets,
+            associativity,
+        ))
+        .unwrap()
     }
 
     #[test]
@@ -404,7 +465,12 @@ mod tests {
 
     #[test]
     fn new_rejects_unknown_prefetcher() {
-        match Cache::new(&cache_config_with_prefetcher(64, 32768, 8, "not_a_real_prefetcher")) {
+        match Cache::new(&cache_config_with_prefetcher(
+            64,
+            32768,
+            8,
+            "not_a_real_prefetcher",
+        )) {
             Err(e) => assert_eq!(e.kind(), crate::error::ErrorKind::Config),
             Ok(_) => panic!("expected an error for an unrecognized prefetcher"),
         }
@@ -417,16 +483,33 @@ mod tests {
         let mut cache = small_cache(2, 1);
         let (a, b, c) = (0x0000u64, 0x0040u64, 0x0080u64);
 
-        assert_eq!(cache.access(&mut dummy_access(a)).result, AccessResult::Miss);
-        assert_eq!(cache.access(&mut dummy_access(b)).result, AccessResult::Miss);
+        assert_eq!(
+            cache.access(&mut dummy_access(a)).result,
+            AccessResult::Miss
+        );
+        assert_eq!(
+            cache.access(&mut dummy_access(b)).result,
+            AccessResult::Miss
+        );
         // a and b now fill both ways; a is least recently used.
-        assert_eq!(cache.access(&mut dummy_access(c)).result, AccessResult::Miss); // evicts a
+        assert_eq!(
+            cache.access(&mut dummy_access(c)).result,
+            AccessResult::Miss
+        ); // evicts a
 
         // Check b before re-probing a: a is now absent, so probing it is
         // itself a miss that would trigger a further eviction (of b, being
         // the new LRU) -- probe order matters here.
-        assert_eq!(cache.access(&mut dummy_access(b)).result, AccessResult::Hit, "b should still be resident");
-        assert_eq!(cache.access(&mut dummy_access(a)).result, AccessResult::Miss, "a should have been evicted");
+        assert_eq!(
+            cache.access(&mut dummy_access(b)).result,
+            AccessResult::Hit,
+            "b should still be resident"
+        );
+        assert_eq!(
+            cache.access(&mut dummy_access(a)).result,
+            AccessResult::Miss,
+            "a should have been evicted"
+        );
     }
 
     #[test]
@@ -511,7 +594,10 @@ mod tests {
 
         cache.install_prefetch(0x0000); // already resident, must not disturb 0x0040
 
-        assert_eq!(cache.access(&mut dummy_access(0x0040)).result, AccessResult::Hit);
+        assert_eq!(
+            cache.access(&mut dummy_access(0x0040)).result,
+            AccessResult::Hit
+        );
     }
 
     #[test]
@@ -562,13 +648,21 @@ mod tests {
         assert_eq!(cache.accesses, 0);
 
         // the line itself must still be resident.
-        assert_eq!(cache.access(&mut dummy_access(0x0000)).result, AccessResult::Hit);
+        assert_eq!(
+            cache.access(&mut dummy_access(0x0000)).result,
+            AccessResult::Hit
+        );
         assert_eq!(cache.get_hits(), 1);
     }
 
     // ---- CacheHierarchy -----------------------------------------------------
 
-    fn full_config(l1i: CacheConfig, l1d: CacheConfig, l2: CacheConfig, llc: CacheConfig) -> Config {
+    fn full_config(
+        l1i: CacheConfig,
+        l1d: CacheConfig,
+        l2: CacheConfig,
+        llc: CacheConfig,
+    ) -> Config {
         Config { llc, l2, l1i, l1d }
     }
 
@@ -638,15 +732,37 @@ mod tests {
         let b = 0x0040u64; // l2 set 1 (block 1 & 3 == 1)
 
         hierarchy.access_instruction(a); // cold: l1i miss, l2 miss, llc miss
-        assert_eq!((hierarchy.l1i.get_misses(), hierarchy.l2.get_misses(), hierarchy.llc.get_misses()), (1, 1, 1));
+        assert_eq!(
+            (
+                hierarchy.l1i.get_misses(),
+                hierarchy.l2.get_misses(),
+                hierarchy.llc.get_misses()
+            ),
+            (1, 1, 1)
+        );
 
         hierarchy.access_instruction(b); // l1i (1-way) evicts a; l2 (different set) misses fresh for b
-        assert_eq!((hierarchy.l1i.get_misses(), hierarchy.l2.get_misses(), hierarchy.llc.get_misses()), (2, 2, 2));
+        assert_eq!(
+            (
+                hierarchy.l1i.get_misses(),
+                hierarchy.l2.get_misses(),
+                hierarchy.llc.get_misses()
+            ),
+            (2, 2, 2)
+        );
 
         hierarchy.access_instruction(a); // l1i misses again (b evicted a's slot), but l2 still holds a
         assert_eq!(hierarchy.l1i.get_misses(), 3);
-        assert_eq!(hierarchy.l2.get_hits(), 1, "a should still be resident in l2");
-        assert_eq!(hierarchy.llc.get_misses(), 2, "llc must not be reached once l2 hits");
+        assert_eq!(
+            hierarchy.l2.get_hits(),
+            1,
+            "a should still be resident in l2"
+        );
+        assert_eq!(
+            hierarchy.llc.get_misses(),
+            2,
+            "llc must not be reached once l2 hits"
+        );
     }
 
     #[test]
@@ -656,9 +772,15 @@ mod tests {
         hierarchy.access_data(&mut dummy_access(0x1000)); // repeated hit: l1d only
         hierarchy.access_data(&mut dummy_access(0x1000));
 
-        assert_eq!((hierarchy.l1d.get_hits(), hierarchy.l1d.get_misses()), (2, 1));
+        assert_eq!(
+            (hierarchy.l1d.get_hits(), hierarchy.l1d.get_misses()),
+            (2, 1)
+        );
         assert_eq!((hierarchy.l2.get_hits(), hierarchy.l2.get_misses()), (0, 1));
-        assert_eq!((hierarchy.llc.get_hits(), hierarchy.llc.get_misses()), (0, 1));
+        assert_eq!(
+            (hierarchy.llc.get_hits(), hierarchy.llc.get_misses()),
+            (0, 1)
+        );
     }
 
     #[test]
@@ -695,13 +817,22 @@ mod tests {
         // llc must have absorbed both evicted dirty lines: w (via l1d's
         // writeback cascading through a full l2) and z (evicted from l2 to
         // make room for w), plus x itself once l2 missed for the demand access.
-        let llc_tags: Vec<u64> =
-            hierarchy.llc.sets[0].lines.iter().filter(|l| l.valid).map(|l| l.tag).collect();
+        let llc_tags: Vec<u64> = hierarchy.llc.sets[0]
+            .lines
+            .iter()
+            .filter(|l| l.valid)
+            .map(|l| l.tag)
+            .collect();
         assert_eq!(llc_tags.len(), 3);
         assert!(llc_tags.contains(&(w / 64)));
         assert!(llc_tags.contains(&(z / 64)));
         assert!(llc_tags.contains(&(x / 64)));
-        assert!(hierarchy.llc.sets[0].lines.iter().all(|l| !l.valid || l.dirty));
+        assert!(
+            hierarchy.llc.sets[0]
+                .lines
+                .iter()
+                .all(|l| !l.valid || l.dirty)
+        );
     }
 
     #[test]
@@ -712,8 +843,15 @@ mod tests {
 
         hierarchy.reset_stats();
 
-        assert_eq!(hierarchy.l1i.get_hits(), 0, "l1i hits should be cleared like every other level");
-        assert_eq!(hierarchy.l1i.get_misses(), 0, "l1i misses should be cleared like every other level");
+        assert_eq!(
+            hierarchy.l1i.get_hits(),
+            0,
+            "l1i hits should be cleared like every other level"
+        );
+        assert_eq!(
+            hierarchy.l1i.get_misses(),
+            0,
+            "l1i misses should be cleared like every other level"
+        );
     }
 }
-

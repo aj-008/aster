@@ -1,9 +1,9 @@
 use crate::cache::CacheHierarchy;
 use crate::config::{Args, Config};
 use crate::error::AsterError;
+use crate::reporter::{ConsoleReporter, Progress, Reporter, RunConfig};
 use crate::stats::SimStats;
 use crate::trace_reader::{TraceSource, open_trace};
-use crate::reporter::{ConsoleReporter, Progress, Reporter, RunConfig};
 use std::time::Instant;
 
 /// Drives a trace through a [`CacheHierarchy`] for a warmup + measurement
@@ -26,7 +26,6 @@ impl Simulator {
         let run_config = RunConfig::from_args_and_config(&args, &config);
         let hierarchy = CacheHierarchy::new(config)?;
         let trace_source = open_trace(&args.trace)?;
-
 
         let mut reporter = Box::new(ConsoleReporter::new());
         reporter.on_start(&run_config);
@@ -56,8 +55,6 @@ impl Simulator {
         let mut next_heartbeat = HEARTBEAT_INTERVAL;
         let start = Instant::now();
 
-
-
         loop {
             let instr = match self.trace_source.next_instruction() {
                 Some(Ok(i)) => i,
@@ -80,7 +77,7 @@ impl Simulator {
             if instr_count >= next_heartbeat {
                 let measured = instr_count.saturating_sub(self.warmup_inst as u64);
                 let snapshot = SimStats::collect(&self.hierarchy, measured);
- 
+
                 self.reporter.on_heartbeat(&Progress {
                     insts_done: instr_count,
                     insts_total: total_inst,
@@ -94,7 +91,6 @@ impl Simulator {
                 });
                 next_heartbeat += HEARTBEAT_INTERVAL;
             }
-
 
             if instr_count == self.simulation_inst as u64 + self.warmup_inst as u64 {
                 break;
@@ -130,7 +126,10 @@ mod tests {
             n,
             suffix
         ));
-        std::fs::File::create(&path).unwrap().write_all(contents).unwrap();
+        std::fs::File::create(&path)
+            .unwrap()
+            .write_all(contents)
+            .unwrap();
         path
     }
 
@@ -177,7 +176,12 @@ mod tests {
     }
 
     fn config() -> Config {
-        Config { llc: cache_config(), l2: cache_config(), l1i: cache_config(), l1d: cache_config() }
+        Config {
+            llc: cache_config(),
+            l2: cache_config(),
+            l1i: cache_config(),
+            l1d: cache_config(),
+        }
     }
 
     fn args(trace: PathBuf, warmup: usize, simulation: usize) -> Args {
@@ -192,7 +196,9 @@ mod tests {
     /// `n` instructions, each touching a distinct, never-repeated data
     /// address (guaranteed cold miss) at a distinct ip.
     fn distinct_instructions(n: u64, addr_base: u64) -> Vec<(u64, u64)> {
-        (0..n).map(|i| (0x1000 + i * 4, addr_base + i * 4096)).collect()
+        (0..n)
+            .map(|i| (0x1000 + i * 4, addr_base + i * 4096))
+            .collect()
     }
 
     #[test]
@@ -203,7 +209,10 @@ mod tests {
         let stats = sim.run().unwrap();
 
         assert_eq!(stats.instructions_simulated, 3);
-        assert_eq!(stats.l1d.misses, 3, "only the 3 post-warmup accesses should be counted");
+        assert_eq!(
+            stats.l1d.misses, 3,
+            "only the 3 post-warmup accesses should be counted"
+        );
     }
 
     #[test]
@@ -233,7 +242,10 @@ mod tests {
         let stats = sim.run().unwrap();
 
         assert_eq!(stats.instructions_simulated, 0);
-        assert_eq!(stats.l1d.misses, 2, "both accesses ran before warmup was ever reached, and were never reset");
+        assert_eq!(
+            stats.l1d.misses, 2,
+            "both accesses ran before warmup was ever reached, and were never reset"
+        );
     }
 
     #[test]
@@ -255,13 +267,23 @@ mod tests {
 
         // The trace path does not need to exist: hierarchy construction is
         // validated first and should fail before the trace is ever opened.
-        let result = Simulator::new(bad_config, args(PathBuf::from("does_not_exist.champsimtrace.trace.gz"), 0, 10));
+        let result = Simulator::new(
+            bad_config,
+            args(
+                PathBuf::from("does_not_exist.champsimtrace.trace.gz"),
+                0,
+                10,
+            ),
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn new_propagates_trace_open_errors() {
-        let result = Simulator::new(config(), args(PathBuf::from("no_such_extension.foo"), 0, 10));
+        let result = Simulator::new(
+            config(),
+            args(PathBuf::from("no_such_extension.foo"), 0, 10),
+        );
         assert!(result.is_err());
     }
 }

@@ -113,7 +113,12 @@ mod tests {
     }
 
     fn hierarchy() -> CacheHierarchy {
-        let config = Config { llc: cache_config(), l2: cache_config(), l1i: cache_config(), l1d: cache_config() };
+        let config = Config {
+            llc: cache_config(),
+            l2: cache_config(),
+            l1i: cache_config(),
+            l1d: cache_config(),
+        };
         CacheHierarchy::new(config).unwrap()
     }
 
@@ -162,7 +167,12 @@ mod tests {
     fn collect_snapshots_every_level_and_the_instruction_count() {
         let mut h = hierarchy();
         h.access_instruction(0x1000);
-        h.access_data(&mut crate::trace_reader::MemAccess { addr: 0x2000, pc: 0, is_write: false, hit: None });
+        h.access_data(&mut crate::trace_reader::MemAccess {
+            addr: 0x2000,
+            pc: 0,
+            is_write: false,
+            hit: None,
+        });
 
         let stats = SimStats::collect(&h, 42);
         assert_eq!(stats.instructions_simulated, 42);
@@ -195,6 +205,9 @@ mod tests {
             llc: CacheStats { hits: 1, misses: 0 },
             instructions_simulated: 1000,
         };
-        assert!(stats.to_string().contains("L1I"), "L1I stats should appear in the printed report");
+        assert!(
+            stats.to_string().contains("L1I"),
+            "L1I stats should appear in the printed report"
+        );
     }
 }

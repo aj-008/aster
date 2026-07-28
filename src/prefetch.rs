@@ -1,8 +1,4 @@
-use crate::{
-    config::CacheConfig,
-    error::AsterError,
-    prefetchers::{stream_buffer::StreamBuffer},
-};
+use crate::{config::CacheConfig, error::AsterError, prefetchers::stream_buffer::StreamBuffer};
 
 pub trait Prefetcher {
     fn observe(&mut self, addr: u64, pc: u64, hit: bool) -> Vec<u64>;
@@ -11,9 +7,9 @@ pub trait Prefetcher {
 pub fn prefetcher_init(config: &CacheConfig) -> Result<Option<Box<dyn Prefetcher>>, AsterError> {
     match &config.prefetcher {
         Some(val) if val == &"stream_buffer".to_string() => Ok(Some(Box::new(StreamBuffer::new(
-                                                                config.block_size,
-                                                                &config.prefetch_settings,
-                                                            )?))),
+            config.block_size,
+            &config.prefetch_settings,
+        )?))),
         Some(_) => Err(AsterError::Config("Prefetcher not implemented".to_string())),
         None => Ok(None),
     }
@@ -22,7 +18,7 @@ pub fn prefetcher_init(config: &CacheConfig) -> Result<Option<Box<dyn Prefetcher
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{default_repl_settings, default_prefetch_settings};
+    use crate::config::{default_prefetch_settings, default_repl_settings};
 
     fn cfg(prefetcher: Option<&str>) -> CacheConfig {
         CacheConfig {

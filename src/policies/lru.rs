@@ -57,7 +57,12 @@ mod tests {
     use super::*;
 
     fn access() -> MemAccess {
-        MemAccess { addr: 0, pc: 0, is_write: false, hit: None }
+        MemAccess {
+            addr: 0,
+            pc: 0,
+            is_write: false,
+            hit: None,
+        }
     }
 
     #[test]
@@ -80,7 +85,11 @@ mod tests {
     fn recently_touched_way_is_not_evicted() {
         let mut lru = Lru::new(32768, 64, 2, &toml::Value::Table(toml::map::Map::new())).unwrap();
         lru.update(0, 0, &access());
-        assert_eq!(lru.find_victim(0), 1, "way 1 never touched, should still be oldest");
+        assert_eq!(
+            lru.find_victim(0),
+            1,
+            "way 1 never touched, should still be oldest"
+        );
         lru.update(0, 1, &access());
         assert_eq!(lru.find_victim(0), 0, "way 0 is now oldest");
     }
@@ -98,7 +107,11 @@ mod tests {
     fn install_behaves_like_update() {
         let mut lru = Lru::new(32768, 64, 2, &toml::Value::Table(toml::map::Map::new())).unwrap();
         lru.install(0, 0, &access());
-        assert_eq!(lru.find_victim(0), 1, "installed way 0 should no longer be the victim");
+        assert_eq!(
+            lru.find_victim(0),
+            1,
+            "installed way 0 should no longer be the victim"
+        );
     }
 
     #[test]

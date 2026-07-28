@@ -104,8 +104,7 @@ pub struct ChampSimReader<R: Read> {
     pub instructions_read: usize,
 }
 
-
-// There is an opiton to use bytemuck here to remove the unsafe block 
+// There is an opiton to use bytemuck here to remove the unsafe block
 // here with macros to ensure no padding on InputInstruction struct
 impl<R: Read> ChampSimReader<R> {
     /// Reads and decodes one fixed-size [`InputInstruction`] record.
@@ -175,7 +174,10 @@ mod tests {
             n,
             suffix
         ));
-        std::fs::File::create(&path).unwrap().write_all(contents).unwrap();
+        std::fs::File::create(&path)
+            .unwrap()
+            .write_all(contents)
+            .unwrap();
         path
     }
 
@@ -383,7 +385,10 @@ mod tests {
     #[test]
     fn next_instruction_propagates_genuine_io_errors_instead_of_swallowing_them() {
         let good = raw_instruction_bytes(0x1000, [0, 0, 0, 0], [0, 0]);
-        let mut reader = ChampSimReader::new(FlakyReader { good_bytes: good, position: 0 });
+        let mut reader = ChampSimReader::new(FlakyReader {
+            good_bytes: good,
+            position: 0,
+        });
 
         let first = reader.next_instruction().unwrap().unwrap();
         assert_eq!(first.ip(), 0x1000);
@@ -402,6 +407,10 @@ mod tests {
         assert!(reader.next_instruction().unwrap().is_ok());
         assert_eq!(reader.instructions_read(), 1);
         assert!(reader.next_instruction().is_none());
-        assert_eq!(reader.instructions_read(), 1, "a clean EOF must not bump the counter");
+        assert_eq!(
+            reader.instructions_read(),
+            1,
+            "a clean EOF must not bump the counter"
+        );
     }
 }

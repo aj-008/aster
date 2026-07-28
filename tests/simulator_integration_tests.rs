@@ -55,7 +55,11 @@ fn full_pipeline_runs_over_a_repeating_working_set_and_warms_up() {
     let total = instructions.len();
     let warmup = 8; // a couple of full passes through the 4-address loop
     let simulation = total - warmup;
-    let mut sim = Simulator::new(config_with_l2_policy("lru"), args(trace, warmup, simulation)).unwrap();
+    let mut sim = Simulator::new(
+        config_with_l2_policy("lru"),
+        args(trace, warmup, simulation),
+    )
+    .unwrap();
 
     let stats = sim.run().unwrap();
 
@@ -71,8 +75,9 @@ fn full_pipeline_runs_over_a_repeating_working_set_and_warms_up() {
 fn full_pipeline_works_with_srrip_configured_on_l2() {
     // Regression coverage for the SRRIP settings-validation fix: this must
     // not error out on default SRRIP settings, unlike before that fix.
-    let instructions: Vec<(u64, u64)> =
-        (0..10).map(|i| (0x2000 + i * 4, 0x40000 + (i % 3) * 4096)).collect();
+    let instructions: Vec<(u64, u64)> = (0..10)
+        .map(|i| (0x2000 + i * 4, 0x40000 + (i % 3) * 4096))
+        .collect();
     let trace = common::gzip_trace_path("srrip_pipeline", &instructions);
 
     let mut sim = Simulator::new(config_with_l2_policy("srrip"), args(trace, 2, 8)).unwrap();
@@ -84,7 +89,9 @@ fn full_pipeline_works_with_srrip_configured_on_l2() {
 #[test]
 fn cold_trace_has_a_zero_percent_l1d_hit_rate() {
     // Every address touched exactly once: every access is a cold miss.
-    let instructions: Vec<(u64, u64)> = (0..6).map(|i| (0x3000 + i * 4, 0x50000 + i * 4096)).collect();
+    let instructions: Vec<(u64, u64)> = (0..6)
+        .map(|i| (0x3000 + i * 4, 0x50000 + i * 4096))
+        .collect();
     let trace = common::gzip_trace_path("all_cold", &instructions);
 
     let mut sim = Simulator::new(config_with_l2_policy("lru"), args(trace, 0, 6)).unwrap();
@@ -100,6 +107,9 @@ fn config_validation_errors_surface_before_any_trace_is_touched() {
     let mut bad = config_with_l2_policy("lru");
     bad.l1d.cache_size = 32; // block_size(64) * associativity(4) > cache_size(32)
 
-    let result = Simulator::new(bad, args(PathBuf::from("irrelevant.champsimtrace.trace.gz"), 0, 1));
+    let result = Simulator::new(
+        bad,
+        args(PathBuf::from("irrelevant.champsimtrace.trace.gz"), 0, 1),
+    );
     assert!(result.is_err());
 }

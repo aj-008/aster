@@ -7,7 +7,6 @@ pub struct RunConfig {
     pub sim_insts: u64,
     pub caches: Vec<CacheConfigSummary>,
 }
- 
 
 #[derive(Debug, Clone)]
 pub struct CacheConfigSummary {
@@ -19,9 +18,7 @@ pub struct CacheConfigSummary {
     pub prefetcher: Option<String>,
     pub repl_settings_debug: String,
     pub prefetch_settings_debug: String,
-
 }
- 
 
 #[derive(Debug, Clone)]
 pub struct Progress {
@@ -30,7 +27,6 @@ pub struct Progress {
     pub elapsed: Duration,
     pub live_hit_rates: Vec<(String, f64)>,
 }
- 
 
 fn format_toml_compact(v: &toml::Value) -> String {
     match v {
@@ -43,7 +39,6 @@ fn format_toml_compact(v: &toml::Value) -> String {
     }
 }
 
-
 fn format_toml_scalar(v: &toml::Value) -> String {
     match v {
         toml::Value::String(s) => s.clone(),
@@ -53,7 +48,10 @@ fn format_toml_scalar(v: &toml::Value) -> String {
         toml::Value::Datetime(d) => d.to_string(),
         toml::Value::Array(a) => format!(
             "[{}]",
-            a.iter().map(format_toml_scalar).collect::<Vec<_>>().join(", ")
+            a.iter()
+                .map(format_toml_scalar)
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
         toml::Value::Table(_) => format_toml_compact(v),
     }
@@ -70,13 +68,15 @@ impl From<(&str, &crate::config::CacheConfig)> for CacheConfigSummary {
             prefetcher: c.prefetcher.clone(),
             repl_settings_debug: format_toml_compact(&c.repl_settings),
             prefetch_settings_debug: format_toml_compact(&c.prefetch_settings),
-
         }
     }
 }
- 
+
 impl RunConfig {
-    pub fn from_args_and_config(args: &crate::config::Args, config: &crate::config::Config) -> Self {
+    pub fn from_args_and_config(
+        args: &crate::config::Args,
+        config: &crate::config::Config,
+    ) -> Self {
         RunConfig {
             trace_path: args.trace.clone(),
             warmup_insts: args.warmup_instructions as u64,
@@ -90,25 +90,25 @@ impl RunConfig {
         }
     }
 }
- 
 
 pub trait Reporter {
     fn on_start(&mut self, config: &RunConfig);
     fn on_heartbeat(&mut self, progress: &Progress);
     fn on_finish(&mut self, results: &crate::stats::SimStats);
 }
- 
 
 pub struct ConsoleReporter {
     start_time: Instant,
 }
- 
+
 impl ConsoleReporter {
     pub fn new() -> Self {
-        Self { start_time: Instant::now() }
+        Self {
+            start_time: Instant::now(),
+        }
     }
 }
- 
+
 impl Reporter for ConsoleReporter {
     fn on_start(&mut self, config: &RunConfig) {
         self.start_time = Instant::now();
@@ -135,10 +135,9 @@ impl Reporter for ConsoleReporter {
             }
 
             println!("----------------------------");
-
         }
     }
- 
+
     fn on_heartbeat(&mut self, p: &Progress) {
         let pct = 100.0 * p.insts_done as f64 / p.insts_total as f64;
         print!(
@@ -151,7 +150,7 @@ impl Reporter for ConsoleReporter {
         use std::io::Write;
         let _ = std::io::stdout().flush();
     }
- 
+
     fn on_finish(&mut self, results: &crate::stats::SimStats) {
         println!(); // close out the heartbeat line
         println!("=== Results ===");

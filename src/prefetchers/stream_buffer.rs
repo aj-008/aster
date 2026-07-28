@@ -82,13 +82,18 @@ impl Prefetcher for StreamBuffer {
                     entry.stride = Some(candidate_stride);
                     entry.confirmed = false;
                     Vec::new()
-                },
+                }
             };
             entry.last_addr = addr;
             return result;
         }
 
-        let new_entry = StreamEntry { pc, last_addr:addr, stride: None, confirmed: false };
+        let new_entry = StreamEntry {
+            pc,
+            last_addr: addr,
+            stride: None,
+            confirmed: false,
+        };
         if self.streams.len() < self.capacity {
             self.streams.push(new_entry);
         } else {
@@ -106,7 +111,10 @@ mod tests {
     fn settings(degree: usize, num_streams: usize) -> toml::Value {
         let mut map = toml::map::Map::new();
         map.insert("degree".to_string(), toml::Value::Integer(degree as i64));
-        map.insert("num_streams".to_string(), toml::Value::Integer(num_streams as i64));
+        map.insert(
+            "num_streams".to_string(),
+            toml::Value::Integer(num_streams as i64),
+        );
         toml::Value::Table(map)
     }
 
@@ -165,7 +173,7 @@ mod tests {
     }
 
     #[test]
-   #[ignore = "known bug: observe()'s match loop does not `return`/`break` after updating an entry \
+    #[ignore = "known bug: observe()'s match loop does not `return`/`break` after updating an entry \
                 that was not already confirmed, so execution always falls through to the round-robin \
                 allocation code at the bottom. With num_streams=1 that allocation always targets the \
                 very slot that was just matched-and-updated, immediately resetting `confirmed` back to \
