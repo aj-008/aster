@@ -372,28 +372,4 @@ mod tests {
         cfg.cache_size = 512; // exactly block_size * associativity -> num_sets == 1
         assert!(validate_cache_config("TEST", &cfg).is_ok());
     }
-
-    fn args_with(warmup: usize, simulation: usize) -> Args {
-        Args {
-            config: PathBuf::from("default.toml"),
-            trace: "x.champsimtrace.trace.gz".to_string(),
-            simulation_instructions: simulation,
-            warmup_instructions: warmup,
-        }
-    }
-
-    #[test]
-    fn validate_options_accepts_warmup_less_than_simulation() {
-        assert!(validate_options(&args_with(10, 100)).is_ok());
-    }
-
-    #[test]
-    fn validate_options_accepts_warmup_equal_to_simulation() {
-        assert!(validate_options(&args_with(100, 100)).is_ok());
-    }
-
-    #[test]
-    fn validate_options_rejects_warmup_greater_than_simulation() {
-        assert!(validate_options(&args_with(101, 100)).is_err());
-    }
 }

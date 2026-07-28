@@ -2,7 +2,7 @@
 name = "aster"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.75"
+rust-version = "1.85"
 description = "A trace-driven cache hierarchy simulator for ChampSim traces"
 repository = "https://github.com/aj-008/aster"
 license = "MIT OR Apache-2.0"
