@@ -2,22 +2,32 @@
 block_size = 64
 cache_size = 2097152
 associativity = 16
-replacement_policy = "lru"
+replacement_policy = "srrip"
+[llc.repl_settings]
+increment = 3
+max_rrpv = 8
+insertion_rrpv = 1
+
 
 [l2]
 block_size = 64
 cache_size = 524288
 associativity = 8
-replacement_policy = "lru"
+replacement_policy = "srrip"
+prefetcher = "stream_buffer"
+[l2.prefetch_settings]
+degree = 4
+num_streams = 10
 
 [l1d]
 block_size = 64
 cache_size = 32768
 associativity = 8
-replacement_policy = "lru"
+replacement_policy = "srrip"
 
 [l1i]
 block_size = 64
 cache_size = 32768
 associativity = 4
-replacement_policy = "lru"
+replacement_policy = "srrip"
+

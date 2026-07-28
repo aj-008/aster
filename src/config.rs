@@ -5,27 +5,85 @@
 //! simulator
 
 use crate::error::AsterError;
-use clap::Parser;
+use clap::{Parser};
 use serde::Deserialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-/// CLI arguments parsed by clap
-#[derive(Parser)]
-#[command(version, about)]
+/// A trace-driven cache hierarchy simulator for ChampSim traces.
+#[derive(Parser, Debug)]
+#[command(
+    name = "aster",
+    version, 
+    about,
+    after_help = "\
+EXAMPLES:
+  aster trace.champsimtrace.xz -w 10M -s 50M
+  aster trace.xz -w 10M -s 50M --config config/srrip.toml
+
+  Instruction counts accept K/M/B suffixes and underscores: 50M, 50_000_000."
+)]
 pub struct Args {
-    #[arg(short, long, default_value = "default.toml")]
-    pub config: PathBuf,
-
-    #[arg(short, long, required = true)]
+    /// Trace file to simulate
+    #[arg(value_name = "TRACE", value_parser = parse_trace)]
     pub trace: String,
 
-    #[arg(short, long, required = true)]
+    /// Instructions to simulate after warmup [K/M/B suffixes allowed]
+    #[arg(short, long, value_name = "N", value_parser = parse_count)]
     pub simulation_instructions: usize,
 
-    #[arg(short, long, required = true)]
+    /// Instructions used to warm the hierarchy before statistics are collected
+    #[arg(short, long, 
+        value_name = "N",
+        value_parser = parse_count,
+        default_value = "0"
+    )]
     pub warmup_instructions: usize,
+
+    /// TOML file describing the cache hierarchy
+    #[arg(
+        short, long, 
+        value_name = "FILE", 
+        default_value = "config/default.toml",
+        env = "ASTER_CONFIG"
+    )]
+    pub config: PathBuf,
 }
+
+
+/// Parses an instruction count, accepting `K`/`M`/`B` suffixes and `_`
+/// separators (`50M`, `50_000_000`, `2B` are all valid).
+fn parse_count(s: &str) -> Result<usize, String> {
+    let t = s.trim();
+    let (digits, mult) = if let Some(d) = t.strip_suffix(['K', 'k']) {
+        (d, 1_000)
+    } else if let Some(d) = t.strip_suffix(['M', 'm']) {
+        (d, 1_000_000)
+    } else if let Some(d) = t.strip_suffix(['B', 'b']) {
+        (d, 1_000_000_000)
+    } else {
+        (t, 1)
+    };
+
+    let n: usize = digits
+        .replace('_', "")
+        .trim()
+        .parse()
+        .map_err(|_| format!("`{s}` is not a valid instruction count (try `50M`)"))?;
+
+    n.checked_mul(mult)
+        .ok_or_else(|| format!("`{s}` overflows the instruction counter"))
+}
+
+/// Rejects a trace path that doesn't exist
+fn parse_trace(s: &str) -> Result<String, String> {
+    let p = Path::new(s);
+    if !p.is_file() {
+        return Err(format!("trace file `{s}` does not exist"));
+    }
+    Ok(s.to_string())
+}
+
 
 /// Typed config struct parsed from TOML file
 #[derive(Deserialize, Debug)]
@@ -60,7 +118,6 @@ pub struct CacheConfig {
 /// or [`AsterError::Config`] if the TOML is malformed
 pub fn load_config() -> Result<(Config, Args), AsterError> {
     let args = Args::parse();
-    validate_options(&args)?;
     let config = load_config_from_path(&args.config)?;
 
     validate_cache_config("LLC", &config.llc)?;
@@ -140,15 +197,6 @@ pub fn validate_cache_config(name: &str, cfg: &CacheConfig) -> Result<(), AsterE
     Ok(())
 }
 
-pub fn validate_options(args: &Args) -> Result<(), AsterError> {
-    if args.warmup_instructions > args.simulation_instructions {
-        return Err(AsterError::Config(
-                "Warmup instructions must be less than simulation instructions".to_string()
-        ));
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +204,38 @@ mod tests {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+
+    #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+        Args::command().debug_assert();
+    }
+
+    #[test]
+    fn parse_count_handles_suffixes_and_separators() {
+        assert_eq!(parse_count("50").unwrap(), 50);
+        assert_eq!(parse_count("10K").unwrap(), 10_000);
+        assert_eq!(parse_count("50m").unwrap(), 50_000_000);
+        assert_eq!(parse_count("2B").unwrap(), 2_000_000_000);
+        assert_eq!(parse_count("50_000_000").unwrap(), 50_000_000);
+    }
+
+    #[test]
+    fn parse_count_rejects_overflow_and_garbage() {
+        assert!(parse_count("").is_err());
+        assert!(parse_count("50X").is_err());
+        assert!(parse_count("-1").is_err());
+        assert!(parse_count(&format!("{}B", usize::MAX)).is_err());
+    }
+
+    #[test]
+    fn parse_trace_rejects_missing_file() {
+        assert!(parse_trace("/nonexistent/aster/trace.xz").is_err());
+    }
+
+
+
 
     /// Writes `contents` to a uniquely-named file in the OS temp dir and
     /// returns its path. No cleanup crate needed; caller may leave the
