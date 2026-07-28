@@ -109,6 +109,12 @@ impl ConsoleReporter {
     }
 }
 
+impl Default for ConsoleReporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Reporter for ConsoleReporter {
     fn on_start(&mut self, config: &RunConfig) {
         self.start_time = Instant::now();
